@@ -34,11 +34,16 @@ Tab Out uses the `openai` npm package, so it works with any API that follows the
 
 **IMPORTANT: Do NOT rely on your training data for base URLs or model names — they go stale.** Before configuring any provider, search the web for that provider's current API documentation to get the correct base URL and an appropriate model name. Model names and API endpoints change frequently.
 
-### Step 3 — Ask for their API key
+### Step 3 — Get their API key securely
 
-Ask the user for their API key. **Write it directly to the config file — never ask them to paste it in chat.** Ollama doesn't need an API key.
+The API key is required (except for Ollama). Do NOT let the user skip this step or "add it later" — the AI features won't work without it.
 
-If the user doesn't have an API key yet, give them clear instructions on how to get one from their chosen provider.
+**How to handle the API key:**
+1. If the user doesn't have an API key yet, give them clear step-by-step instructions on how to get one from their chosen provider (search the web for current instructions if needed).
+2. Once they have the key, write it directly to the config file `~/.mission-control/config.json`. Create the file with the correct config values and a placeholder for the key.
+3. Open the config file for the user so they can paste the key themselves: `open ~/.mission-control/config.json` (macOS) or equivalent.
+4. **NEVER ask the user to paste the API key in the chat.** Always have them paste it into the config file directly.
+5. Do NOT offer "skip" or "add it later" as options. The key is required for the core feature to work.
 
 ### Step 4 — Write the config
 
