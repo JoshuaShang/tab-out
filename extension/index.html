@@ -7,11 +7,15 @@
 
   <!-- Google Fonts: Newsreader (for headings/numbers) + DM Sans (for body text) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300;1,6..72,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300;1,6..72,400&family=DM+Sans:wght@300;400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
+<!-- Background image layer — sits behind everything, opacity controlled by user -->
+<div id="bgLayer" style="display:none"></div>
+
 <div class="container">
 
 
@@ -21,12 +25,107 @@
        ================================================================ -->
   <header>
     <div class="header-left">
-      <!-- "Good afternoon" — written by getGreeting() in app.js -->
+      <!-- "Good afternoon, Joshua" — written by getGreeting() + fetchGoogleAccountName() in app.js -->
       <h1 id="greeting"></h1>
       <!-- "Friday, April 4, 2026" — written by getDateDisplay() in app.js -->
       <div class="date" id="dateDisplay"></div>
     </div>
+    <div class="header-right">
+      <!-- Edit Homepage button — small, opens the background customisation panel -->
+      <button class="edit-homepage-btn" id="editHomepageBtn">Edit Homepage</button>
+    </div>
   </header>
+
+  <!-- Google search bar — sits between the header and the tab cards -->
+  <div class="search-section">
+    <form class="search-form" id="googleSearchForm" autocomplete="off">
+      <svg class="search-google-logo" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+      </svg>
+      <input type="text" class="search-input" id="googleSearchInput" placeholder="Search Google...">
+    </form>
+  </div>
+
+  <!-- ================================================================
+       TO DO LIST MODULE
+       Shown only when "Enable" is ticked in Edit Homepage.
+       "Hide" tick collapses the body and shows a chevron to expand.
+       ================================================================ -->
+  <div id="todoSection" style="display:none" class="todo-section">
+    <div class="todo-card">
+      <!-- Title bar — always visible -->
+      <div class="todo-titlebar">
+        <div class="todo-titlebar-left">
+          <h3 class="todo-module-title">To Do</h3>
+          <span id="todoProgressPct" class="todo-pct-label"></span>
+        </div>
+        <div class="todo-titlebar-right">
+          <!-- Collapse chevron — only visible when Hide is ticked -->
+          <button id="todoCollapseBtn" class="todo-collapse-btn" style="display:none" title="Expand / Collapse">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                 stroke-width="2" stroke="currentColor" style="width:14px;height:14px">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Collapsible body -->
+      <div id="todoBody">
+        <!-- Progress bar -->
+        <div class="todo-progress-track">
+          <div id="todoProgressBar" class="todo-progress-fill"></div>
+        </div>
+        <!-- Table rendered by todo.js -->
+        <div id="todoTableWrap"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       FAVORITES MODULE
+       Shown only when "Enable" is ticked in Edit Homepage.
+       ================================================================ -->
+  <div id="favSection" style="display:none" class="fav-section">
+    <div class="fav-card">
+      <!-- Title bar — always visible -->
+      <div class="fav-titlebar">
+        <div class="fav-titlebar-left">
+          <h3 class="fav-module-title">Favorites</h3>
+        </div>
+        <div class="fav-titlebar-right">
+          <button id="favAddBtn" class="fav-add-btn">+ Add</button>
+          <button id="favCollapseBtn" class="todo-collapse-btn" style="display:none" title="Expand / Collapse">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                 stroke-width="2" stroke="currentColor" style="width:14px;height:14px">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Add shortcut form — hidden until + Add is clicked -->
+      <div id="favAddForm" class="fav-add-form" style="display:none">
+        <input id="favUrlInput"  class="fav-input" placeholder="URL or file path  (e.g. https://github.com or D:\Files\doc.pdf)" autocomplete="off">
+        <input id="favNameInput" class="fav-input" placeholder="Label (auto-filled from URL if blank)" autocomplete="off">
+        <div class="fav-form-actions">
+          <button id="favConfirmAdd" class="fav-btn-primary">Add shortcut</button>
+          <button id="favCancelAdd"  class="fav-btn-cancel">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Collapsible body — grid of shortcut pills -->
+      <div id="favBody">
+        <div id="favList"  class="fav-list"></div>
+        <div id="favEmpty" class="fav-empty" style="display:none">
+          No shortcuts yet — click <strong>+ Add</strong> to pin a site or file.
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- ================================================================
        TAB OUT DUPES BANNER — appears when you have extra Tab Out tabs open
@@ -107,7 +206,7 @@
       </div>
     </div>
     <div class="last-refresh">
-      <span style="color: var(--muted); font-size: 11px;"><a href="https://github.com/zarazhangrui/tab-out" target="_top" style="color: var(--muted); text-decoration: underline; text-underline-offset: 2px;">Tab Out</a> by <a href="https://x.com/zarazhangrui" target="_top" style="color: var(--muted); text-decoration: underline; text-underline-offset: 2px;">Zara</a></span>
+      <span style="color: var(--muted); font-size: 11px;">Tab Out by JS</span>
     </div>
   </footer>
 
@@ -125,9 +224,67 @@
   <span id="toastText"></span>
 </div>
 
+<!-- Edit Homepage panel — direct child of body so position:fixed escapes all stacking contexts -->
+<div class="edit-homepage-panel" id="editHomepagePanel" style="display:none">
+  <div class="edit-panel-section">
+    <div class="edit-panel-label">Background image</div>
+    <div class="upload-area" id="uploadArea">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:18px;height:18px;color:var(--muted)"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" /></svg>
+      <span id="uploadLabel">Click to upload image</span>
+      <input type="file" accept="image/*" id="bgImageInput" style="display:none">
+    </div>
+  </div>
+  <div class="edit-panel-section">
+    <div class="edit-panel-row">
+      <div class="edit-panel-label">Opacity</div>
+      <span class="edit-panel-value" id="bgOpacityValue">100%</span>
+    </div>
+    <input type="range" class="opacity-slider" id="bgOpacitySlider" min="0" max="100" value="100">
+  </div>
+  <button class="clear-bg-btn" id="clearBgBtn">Clear background</button>
+
+  <!-- To Do List toggles -->
+  <div class="edit-panel-divider"></div>
+  <div class="edit-panel-section">
+    <div class="edit-panel-label">To Do List</div>
+    <div class="todo-toggle-group">
+      <label class="todo-toggle-label">
+        <input type="checkbox" id="todoEnableChk">
+        <span>Enable</span>
+      </label>
+      <label class="todo-toggle-label" id="todoHideLabelWrap">
+        <input type="checkbox" id="todoHideChk" disabled>
+        <span>Hide</span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Favorites toggles -->
+  <div class="edit-panel-divider"></div>
+  <div class="edit-panel-section">
+    <div class="edit-panel-label">Favorites</div>
+    <div class="todo-toggle-group">
+      <label class="todo-toggle-label">
+        <input type="checkbox" id="favEnableChk">
+        <span>Enable</span>
+      </label>
+      <label class="todo-toggle-label" id="favHideLabelWrap">
+        <input type="checkbox" id="favHideChk" disabled>
+        <span>Hide</span>
+      </label>
+    </div>
+  </div>
+</div>
+
 <!-- Personal config (gitignored) — defines LOCAL_LANDING_PAGE_PATTERNS etc. -->
 <!-- If the file doesn't exist, that's fine — app.js uses sensible defaults. -->
 <script src="config.local.js" onerror="/* no personal config, that's fine */"></script>
+
+<!-- To Do List module -->
+<script src="todo.js"></script>
+
+<!-- Favorites module -->
+<script src="favorites.js"></script>
 
 <!-- Main dashboard logic — loads last so the DOM is ready -->
 <script src="app.js"></script>

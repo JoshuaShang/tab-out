@@ -1005,6 +1005,169 @@ function renderArchiveItem(item) {
 
 
 /* ----------------------------------------------------------------
+   GOOGLE ACCOUNT NAME
+   ---------------------------------------------------------------- */
+
+/**
+ * fetchGoogleAccountName()
+ *
+ * Returns the first name extracted from the signed-in Google account email,
+ * or null if no account is found or the API is unavailable.
+ * Requires the "identity" permission in manifest.json.
+ */
+async function fetchGoogleAccountName() {
+  try {
+    const info = await chrome.identity.getProfileUserInfo({ accountStatus: 'ANY' });
+    if (!info || !info.email) return null;
+    // Extract first name from email prefix (e.g. "joshua.shang@gmail.com" → "Joshua")
+    const prefix = info.email.split('@')[0].split('.')[0];
+    return prefix.charAt(0).toUpperCase() + prefix.slice(1);
+  } catch {
+    return null;
+  }
+}
+
+
+/* ----------------------------------------------------------------
+   BACKGROUND IMAGE
+   ---------------------------------------------------------------- */
+
+async function loadBgSettings() {
+  const data = await chrome.storage.local.get(['bgImage', 'bgOpacity']);
+  return {
+    bgImage:   data.bgImage   || null,
+    bgOpacity: data.bgOpacity !== undefined ? data.bgOpacity : 1,
+  };
+}
+
+async function saveBgSettings(bgImage, bgOpacity) {
+  await chrome.storage.local.set({ bgImage, bgOpacity });
+}
+
+function applyBackground(bgImage, bgOpacity) {
+  const layer = document.getElementById('bgLayer');
+  if (!layer) return;
+  if (bgImage) {
+    layer.style.backgroundImage = `url(${bgImage})`;
+    layer.style.opacity = bgOpacity;
+    layer.style.display = 'block';
+  } else {
+    layer.style.backgroundImage = '';
+    layer.style.display = 'none';
+  }
+}
+
+/**
+ * compressImage(file)
+ *
+ * Resizes the uploaded image to at most 1920×1080 and encodes it as
+ * JPEG so it fits comfortably within chrome.storage.local's 5 MB quota.
+ */
+function compressImage(file) {
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const maxW = 1920, maxH = 1080;
+      let w = img.width, h = img.height;
+      if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+      if (h > maxH) { w = Math.round(w * maxH / h); h = maxH; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    img.src = url;
+  });
+}
+
+/**
+ * initEditPanel()
+ *
+ * Wires up all UI interactions for the Edit Homepage panel:
+ * open/close toggle, file upload, opacity slider, and clear button.
+ * Called once on page load.
+ */
+async function initEditPanel() {
+  const btn         = document.getElementById('editHomepageBtn');
+  const panel       = document.getElementById('editHomepagePanel');
+  const fileInput   = document.getElementById('bgImageInput');
+  const uploadArea  = document.getElementById('uploadArea');
+  const uploadLabel = document.getElementById('uploadLabel');
+  const slider      = document.getElementById('bgOpacitySlider');
+  const opacityVal  = document.getElementById('bgOpacityValue');
+  const clearBtn    = document.getElementById('clearBgBtn');
+
+  if (!btn || !panel) return;
+
+  // Restore saved settings into the panel UI
+  const { bgImage, bgOpacity } = await loadBgSettings();
+  applyBackground(bgImage, bgOpacity);
+  const savedPct = Math.round(bgOpacity * 100);
+  slider.value = savedPct;
+  opacityVal.textContent = savedPct + '%';
+  if (bgImage) uploadLabel.textContent = 'Image set — click to change';
+
+  // Toggle panel open/close
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
+  });
+
+  // Close when clicking anywhere outside the panel
+  document.addEventListener('click', e => {
+    if (!panel.contains(e.target) && e.target !== btn) {
+      panel.style.display = 'none';
+    }
+  });
+
+  // File upload — trigger hidden input when the upload area is clicked
+  uploadArea.addEventListener('click', () => fileInput.click());
+
+  fileInput.addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    uploadLabel.textContent = 'Compressing…';
+    const compressed = await compressImage(file);
+    if (!compressed) { uploadLabel.textContent = 'Failed to load image'; return; }
+    const opacity = parseInt(slider.value) / 100;
+    await saveBgSettings(compressed, opacity);
+    applyBackground(compressed, opacity);
+    uploadLabel.textContent = 'Image set — click to change';
+    showToast('Background updated');
+    // Reset file input so re-selecting the same file triggers change again
+    fileInput.value = '';
+  });
+
+  // Opacity slider — live preview + persist on release
+  slider.addEventListener('input', () => {
+    const pct = parseInt(slider.value);
+    opacityVal.textContent = pct + '%';
+    const layer = document.getElementById('bgLayer');
+    if (layer && layer.style.display !== 'none') layer.style.opacity = pct / 100;
+  });
+
+  slider.addEventListener('change', async () => {
+    const { bgImage: currentImg } = await loadBgSettings();
+    if (currentImg) await saveBgSettings(currentImg, parseInt(slider.value) / 100);
+  });
+
+  // Clear background
+  clearBtn.addEventListener('click', async () => {
+    await saveBgSettings(null, 1);
+    applyBackground(null, 1);
+    slider.value = 100;
+    opacityVal.textContent = '100%';
+    uploadLabel.textContent = 'Click to upload image';
+    panel.style.display = 'none';
+    showToast('Background cleared');
+  });
+}
+
+
+/* ----------------------------------------------------------------
    MAIN DASHBOARD RENDERER
    ---------------------------------------------------------------- */
 
@@ -1023,7 +1186,8 @@ async function renderStaticDashboard() {
   // --- Header ---
   const greetingEl = document.getElementById('greeting');
   const dateEl     = document.getElementById('dateDisplay');
-  if (greetingEl) greetingEl.textContent = getGreeting();
+  const accountName = await fetchGoogleAccountName();
+  if (greetingEl) greetingEl.textContent = accountName ? `${getGreeting()}, ${accountName}` : getGreeting();
   if (dateEl)     dateEl.textContent     = getDateDisplay();
 
   // --- Fetch tabs ---
@@ -1477,6 +1641,132 @@ document.addEventListener('input', async (e) => {
 
 
 /* ----------------------------------------------------------------
+   SHARED TOGGLE FACTORY
+   Builds Enable/Hide checkbox logic for any module.
+
+   Why synchronous?  The previous async version attached event
+   listeners AFTER an await, so if anything between the await and
+   the addEventListener threw, the checkboxes were silently dead.
+   Now: listeners are wired first, state is applied via callback.
+   ---------------------------------------------------------------- */
+
+/**
+ * initModuleToggles(opts)
+ *
+ * @param {object} opts
+ *   storageKeys  – { enable, hide }  keys in chrome.storage.local
+ *   elements     – { enableChk, hideChk, hideWrap, section, body, collapseBtn }
+ *   onEnable     – optional callback(isOn) after enable state changes
+ */
+function initModuleToggles({ storageKeys, elements, onEnable }) {
+  const { enableChk, hideChk, hideWrap, section, body, collapseBtn } = elements;
+  if (!enableChk || !section) return;
+
+  function setHide(on) {
+    hideChk.checked = on;
+    if (collapseBtn) collapseBtn.style.display = on ? 'flex' : 'none';
+    if (body)        body.style.display = on ? 'none' : 'block';
+    if (!on && collapseBtn) collapseBtn.classList.remove('todo-collapse-open');
+  }
+
+  function setEnable(on) {
+    section.style.display = on ? 'block' : 'none';
+    enableChk.checked     = on;
+    hideChk.disabled      = !on;
+    hideWrap.classList.toggle('todo-hide-enabled', on);
+    if (!on) { hideChk.checked = false; setHide(false); }
+    if (onEnable) onEnable(on);
+  }
+
+  // ── wire listeners synchronously ───────────────────────────────
+  enableChk.addEventListener('change', () => {
+    setEnable(enableChk.checked);
+    chrome.storage.local.set({ [storageKeys.enable]: enableChk.checked });
+  });
+
+  hideChk.addEventListener('change', () => {
+    setHide(hideChk.checked);
+    chrome.storage.local.set({ [storageKeys.hide]: hideChk.checked });
+  });
+
+  // Collapse chevron — toggles body when Hide is active
+  if (collapseBtn && body) {
+    collapseBtn.addEventListener('click', () => {
+      const isHidden = body.style.display === 'none';
+      body.style.display = isHidden ? 'block' : 'none';
+      collapseBtn.classList.toggle('todo-collapse-open', isHidden);
+    });
+  }
+
+  // ── restore saved state via callback (no async/await) ──────────
+  chrome.storage.local.get([storageKeys.enable, storageKeys.hide], data => {
+    setEnable(!!data[storageKeys.enable]);
+    if (data[storageKeys.enable]) setHide(!!data[storageKeys.hide]);
+  });
+}
+
+
+/* ----------------------------------------------------------------
+   TODO TOGGLES
+   ---------------------------------------------------------------- */
+
+function initTodoToggles() {
+  initModuleToggles({
+    storageKeys: { enable: 'todoEnabled', hide: 'todoHidden' },
+    elements: {
+      enableChk:   document.getElementById('todoEnableChk'),
+      hideChk:     document.getElementById('todoHideChk'),
+      hideWrap:    document.getElementById('todoHideLabelWrap'),
+      section:     document.getElementById('todoSection'),
+      body:        document.getElementById('todoBody'),
+      collapseBtn: document.getElementById('todoCollapseBtn'),
+    },
+    onEnable: on => {
+      if (on && window.renderTodos) window.renderTodos();
+    },
+  });
+
+  // Init the todo module (event listeners for input, list, etc.)
+  if (window.initTodoModule) window.initTodoModule();
+}
+
+
+/* ----------------------------------------------------------------
+   FAVORITES TOGGLES
+   ---------------------------------------------------------------- */
+
+function initFavToggles() {
+  initModuleToggles({
+    storageKeys: { enable: 'favEnabled', hide: 'favHidden' },
+    elements: {
+      enableChk:   document.getElementById('favEnableChk'),
+      hideChk:     document.getElementById('favHideChk'),
+      hideWrap:    document.getElementById('favHideLabelWrap'),
+      section:     document.getElementById('favSection'),
+      body:        document.getElementById('favBody'),
+      collapseBtn: document.getElementById('favCollapseBtn'),
+    },
+    onEnable: on => {
+      if (on && window.renderFavorites) window.renderFavorites();
+    },
+  });
+
+  // Init the favorites module
+  if (window.initFavoritesModule) window.initFavoritesModule();
+}
+
+
+/* ----------------------------------------------------------------
    INITIALIZE
    ---------------------------------------------------------------- */
 renderDashboard();
+initEditPanel();
+initTodoToggles();
+initFavToggles();
+
+// Google search — submit navigates the current tab to Google search results
+document.getElementById('googleSearchForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const q = document.getElementById('googleSearchInput').value.trim();
+  if (q) window.location.href = `https://www.google.com/search?q=${encodeURIComponent(q)}`;
+});
